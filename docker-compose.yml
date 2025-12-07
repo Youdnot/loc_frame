@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  slam-server:
+    build: .
+    ports:
+      - "8000:8000"
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
