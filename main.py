@@ -7,6 +7,9 @@ import json
 import asyncio
 from typing import List, Dict, Any
 
+import cv2
+import numpy as np
+
 app = FastAPI(title="Edge SLAM Localization Service", description="用于接收图像并返回SLAM定位和矫正信息的API")
 
 # --- 预留的 SLAM 接口与图像处理 ---
@@ -31,32 +34,55 @@ class SLAMProcessor:
         Returns:
             dict: 包含 pose, correction_matrix, confidence 的字典
         """
-        # TODO: 1. 图像解码
-        # 实际项目中通常使用 OpenCV 或 PIL 解码
-        # import cv2
-        # import numpy as np
-        # nparr = np.frombuffer(image_data, np.uint8)
-        # img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        # TODO: 2. 调用 SLAM 核心算法进行定位
-        # pose, correction = self.slam_system.TrackMonocular(img, time.time())
-        
-        # --- 以下为模拟返回数据 ---
-        return {
-            "pose": {
-                "x": random.uniform(-5.0, 5.0),
-                "y": random.uniform(-5.0, 5.0),
-                "z": random.uniform(0.0, 2.0),
-                "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0
-            },
-            "correction_matrix": [
-                [1.0, 0.0, 0.0, 0.01],
-                [0.0, 1.0, 0.0, -0.02],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0]
-            ],
-            "confidence": 0.98
-        }
+        if not image_data:
+            return {"error": "Empty image data"}
+
+        try:
+            # 1. 图像解码
+            # 使用 OpenCV 解码二进制流
+            nparr = np.frombuffer(image_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if img is None:
+                print("Error: Failed to decode image")
+                return {"error": "Invalid image format"}
+
+            # 获取图像信息用于验证
+            # 返回图像尺寸和均值，证明服务器成功解析了图像数据
+            height, width, channels = img.shape
+            mean_val = float(np.mean(img))
+            
+            image_info = {
+                "width": width,
+                "height": height,
+                "channels": channels,
+                "mean_intensity": f"{mean_val:.2f}",
+                "received_bytes": len(image_data)
+            }
+
+            # TODO: 2. 调用 SLAM 核心算法进行定位
+            # pose, correction = self.slam_system.TrackMonocular(img, time.time())
+            
+            # --- 以下为模拟返回数据 ---
+            return {
+                "pose": {
+                    "x": random.uniform(-5.0, 5.0),
+                    "y": random.uniform(-5.0, 5.0),
+                    "z": random.uniform(0.0, 2.0),
+                    "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0
+                },
+                "correction_matrix": [
+                    [1.0, 0.0, 0.0, 0.01],
+                    [0.0, 1.0, 0.0, -0.02],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0]
+                ],
+                "confidence": 0.98,
+                "image_verification": image_info
+            }
+        except Exception as e:
+            print(f"Error processing image: {e}")
+            return {"error": str(e)}
 
 # 实例化全局处理器，确保模型只加载一次
 slam_processor = SLAMProcessor()
@@ -66,7 +92,7 @@ class Pose(BaseModel):
     x: float
     y: float
     z: float
-    qx: float  # 四元数
+    qx: float  
     qy: float
     qz: float
     qw: float
@@ -96,6 +122,10 @@ async def websocket_endpoint(websocket: WebSocket):
             # 这里传入的是原始字节流，解码工作在 process_image 内部完成
             result = slam_processor.process_image(data)
             
+            if "error" in result:
+                await websocket.send_json({"status": "error", "message": result["error"]})
+                continue
+            
             process_time = (time.time() - start_time) * 1000
             
             response = {
@@ -104,7 +134,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 "pose": result["pose"],
                 "correction_matrix": result["correction_matrix"],
                 "confidence": result["confidence"],
-                "processing_time_ms": process_time
+                "processing_time_ms": process_time,
+                "image_verification": result.get("image_verification")
             }
             
             # 发送JSON结果回Unity
