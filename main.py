@@ -1,8 +1,8 @@
 # Build based on [WebSockets - FastAPI](https://fastapi.tiangolo.com/advanced/websockets/)
 
-from typing import Union
+from typing import Union, List
 
-from fastapi import FastAPI, WebSocket, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 
 from fastapi.responses import HTMLResponse
 
