@@ -62,5 +62,6 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_text(f"Message text was: {data}")
 
 @app.post("/upload/image/")
-async def upload_image(image_data: bytes):
+async def upload_image(file: UploadFile = File(...)):
+    image_data = await file.read()
     return {"file_size": len(image_data)}
