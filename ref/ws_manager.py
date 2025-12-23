@@ -1,5 +1,6 @@
 # From [Broadcasting a message from a manager to clients in websocket using fastapi · fastapi/fastapi · Discussion #6370 · GitHub](https://github.com/fastapi/fastapi/discussions/6370)
 # In case we need to manage multiple connections
+# There is a more complete example in official doc [here](https://fastapi.tiangolo.com/advanced/websockets/#handling-disconnections-and-multiple-clients)
 
 from typing import List
 
