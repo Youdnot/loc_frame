@@ -1,3 +1,7 @@
+// Example WebSocket connection in Unity using NativeWebSocket package
+// See https://github.com/endel/NativeWebSocket
+// Add comments for understanding
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
