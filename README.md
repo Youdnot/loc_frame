@@ -1,3 +1,12 @@
+# Todos
+
+- [ ] test image restore and manipulate
+- [ ] test send back pose/info to unity
+    - and use the info to action
+- [ ] retrieve continuous pose of HMD
+
+# Intro
+
 A framework for image transision and pose retrival.
 
 Using FastAPI, uv

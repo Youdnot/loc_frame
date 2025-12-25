@@ -11,7 +11,7 @@ public class LocConnection : MonoBehaviour
     WebSocket websocket;
 
     // 服务器IP地址
-    [SerializeField] private string _uri = "ws://127.0.0.1:8000/ws/loc/";
+    [SerializeField] private string _uri = "ws://127.0.0.1:8000/ws";
 
     // Image date
     byte[] imgByte;
