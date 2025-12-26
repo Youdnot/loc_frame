@@ -1,15 +1,49 @@
+# Start with:
+# fastapi run main.py
+# to allow external connections
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+# from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import json
 import math
 import time
+from datetime import datetime
+from dataclasses import dataclass, asdict
 
 import numpy as np
 import cv2
 
-# from pydantic import BaseModel
+# Data Models
+@dataclass
+class Vector3:
+    x: float
+    y: float
+    z: float
+
+@dataclass
+class Quaternion:
+    x: float
+    y: float
+    z: float
+    w: float
+
+@dataclass
+class ServerResponse:
+    timestamp: str
+    position: Vector3
+    rotation: Quaternion
 
 app = FastAPI(title="My Application", description="This is a sample FastAPI application.")
+
+# 配置 CORS，允许所有来源访问，解决 403 Forbidden 问题
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],  # 在生产环境中建议设置为具体的域名列表
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 class ConnectionManager:
     def __init__(self):
@@ -93,22 +127,23 @@ async def websocket_endpoint(websocket: WebSocket):
                     # 构造符合 Unity 端 ServerResponse 结构的测试数据
                     # 模拟一个简单的圆周运动，以便在 Unity 中观察到变化
                     t = time.time()
-                    response_data = {
-                        "position": {
-                            "x": math.sin(t) * 0.5,
-                            "y": 0.0,
-                            "z": math.cos(t) * 0.5
-                        },
-                        "rotation": {
-                            "x": 0.0,
-                            "y": 0.0,
-                            "z": 0.0,
-                            "w": 1.0
-                        }
-                    }
+                    response = ServerResponse(
+                        timestamp=datetime.now().isoformat(),
+                        position=Vector3(
+                            x=math.sin(t) * 0.5,
+                            y=0.0,
+                            z=math.cos(t) * 0.5
+                        ),
+                        rotation=Quaternion(
+                            x=0.0,
+                            y=0.0,
+                            z=0.0,
+                            w=1.0
+                        )
+                    )
                     
                     # 发送 JSON 文本给 Unity
-                    await websocket.send_text(json.dumps(response_data))
+                    await websocket.send_text(json.dumps(asdict(response)))
                     
     except WebSocketDisconnect:
         print("Client disconnected")
