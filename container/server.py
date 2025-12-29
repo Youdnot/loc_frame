@@ -3,7 +3,6 @@
 # to allow external connections
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-# from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import json
 import math
@@ -35,15 +34,6 @@ class ServerResponse:
     rotation: Quaternion
 
 app = FastAPI(title="My Application", description="This is a sample FastAPI application.")
-
-# 配置 CORS，允许所有来源访问，解决 403 Forbidden 问题
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],  # 在生产环境中建议设置为具体的域名列表
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
 
 class ConnectionManager:
     def __init__(self):
