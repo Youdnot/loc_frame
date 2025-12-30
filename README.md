@@ -1,112 +1,182 @@
-# Todos
-
-- [ ] test image restore and manipulate
-- [ ] test send back pose/info to unity
-    - and use the info to action
-- [ ] retrieve continuous pose of HMD
-
-# Intro
-
-A framework for image transision and pose retrival.
-
-Using FastAPI, uv
-
-## Files
-
-- Dockerfile
-    - reproduction of environment
-
-
-# Workflow
-
-This guide outlines the integration of Unity, WebSocket communication, and ROS within a containerized Python environment.
+# Loc-Frame
 
 ## Overview
 
-The pipeline captures raw sensor data from an HMD, compresses it for network efficiency, transmits it to a remote server for AI/Robotics processing (ROS), and optionally returns metadata for Augmented Reality (AR) visualization.
+Loc-Frame is a client-server framework for real-time localization using head-mounted device (HMD) imagery and IMU data. The system uses a multi-container architecture with FastAPI and WebSocket for real-time communication between Unity HMD client and ROS-based localization backend.
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [Technical Implementation](#technical-implementation)
+- [Development](#development)
+- [Future Improvements](#future-improvements)
 
 ## Architecture
 
-| Component         | Role                    | Technology                         |
-| ----------------- | ----------------------- | ---------------------------------- |
-| **HMD / Unity**   | Source & Client         | C#, WebCamTexture, WebSocket-Sharp |
-| **Network**       | Transport               | WebSocket (TCP) - Binary Frame     |
-| **Python Server** | Middleware & Processing | websockets library, OpenCV, NumPy  |
-| **ROS Container** | Robotic Integration     | ROS1/ROS2, Docker, cv_bridge       |
+Loc-Frame follows a **three-component client-server architecture** designed for real-time performance:
+
+### 1. Unity HMD Client
+- **Role**: Data acquisition and pose application
+- **Technology**: C#, Unity, NativeWebSocket
+- **Functionality**:
+  - Captures images from HMD cameras
+  - Collects IMU data and timestamps
+  - Compresses images (JPG) for efficient transmission
+  - Establishes WebSocket connection with server
+  - Applies pose corrections from localization backend
+
+### 2. WebSocket Server (Container 1)
+- **Role**: Real-time communication middleware
+- **Technology**: Python, FastAPI, WebSocket, aiohttp
+- **Functionality**:
+  - Manages WebSocket connections with Unity clients
+  - Receives compressed image data
+  - Forwards images to ROS localization backend via HTTP API
+  - Relays pose estimation results back to Unity
+  - Handles client connection management
+
+### 3. ROS Localization Backend (Container 2)
+- **Role**: Pose estimation engine
+- **Technology**: Python, FastAPI, OpenCV, ROS
+- **Functionality**:
+  - Provides HTTP API endpoint for image processing
+  - Decodes and processes incoming images
+  - Runs pose estimation algorithms
+  - Returns pose data in JSON format
+
+### Data Flow
+
+```
+Unity HMD → WebSocket → Container 1 → HTTP POST → Container 2 (ROS)
+Container 2 → HTTP Response → Container 1 → WebSocket → Unity HMD
+```
+
+## Project Structure
+
+```
+├── Unity/              # Unity HMD client implementation
+│   ├── Connection.cs   # WebSocket connection manager
+│   ├── UnityClient.cs  # Main client logic
+│   └── README.md       # Unity client documentation
+├── container/          # WebSocket server container
+│   ├── Dockerfile      # Container configuration
+│   ├── server-v2.py    # Main WebSocket server
+│   └── README.md       # Server documentation
+├── ros/                # ROS localization backend
+│   ├── app.py          # HTTP API for pose estimation
+│   └── localization/   # Pose estimation algorithms
+├── utils/              # Utility functions
+│   └── byte2img.py     # Image decoding utilities
+├── main.py             # Sample server (for reference)
+└── README.md           # This file
+```
+
+## Quick Start
+
+### Prerequisites
+
+- Docker
+- Unity 2020.3+ (for client development)
+- Python 3.10+ (for development)
+- ROS 2 (for localization backend development)
+
+### Build and Run Docker Containers
+
+#### Container 1: WebSocket Server
+```shell
+cd container/
+docker build -t loc-frame-websocket .
+docker run -p 8000:8000 --name loc-websocket loc-frame-websocket
+```
+
+#### Container 2: ROS Localization Backend
+```shell
+cd ros/
+docker build -t loc-frame-ros .
+docker run -p 8001:8000 --name loc-ros --network="host" loc-frame-ros
+```
+
+### Unity Client Setup
+
+1. Open the Unity project in the `Unity/` directory
+2. Update the WebSocket server URI in `UnityClient.cs`:
+   ```csharp
+   [SerializeField] private string _uri = "ws://<server-ip>:8000/ws";
+   ```
+3. Build and deploy to your HMD device
+4. Run the application on the HMD
+
+### Testing the System
+
+1. Start both Docker containers
+2. Run the Unity application on the HMD
+3. Verify WebSocket connection in server logs
+4. Monitor pose estimation results in Unity console
 
 ## Technical Implementation
 
-### 1. Image Acquisition (Unity)
+### Image Processing Pipeline
 
-The HMD (Pico 4 Ultra Enterprise) captures frames through its onboard cameras.
+1. **Image Acquisition (Unity)**
+   - Capture frames from HMD cameras using SDK-specific APIs
+   - Downscale resolution if high precision is not required
+   - Read pixels from GPU to Texture2D object
 
-- **Method**: SDK-specific APIs for camera access [相机数据 | PICO 开发者平台](https://developer-cn.picoxr.com/document/unity/p2j6gj2q/)
-- **Texture Management:** Read the pixels from the GPU to a Texture2D object.
-- **Optimization:** Downscale the resolution (e.g., 1280x720 to 640x480) at this stage if high precision is not required, reducing network load.
+2. **Encoding and Compression**
+   - Convert Texture2D to byte array using Texture2D.EncodeToJPG()
+   - Use background threading to prevent frame drops
+   - JPG quality set to 90 for optimal balance of size and feature preservation
 
-### 2. Encoding and Compression
+3. **WebSocket Transmission**
+   - Send data as binary messages (byte[]) instead of Base64 strings
+   - Optional: Add fixed-size byte prefix for timestamp and image ID
+   - Asynchronous transmission to avoid blocking main thread
 
-Sending raw RGBA arrays is inefficient for wireless networks.
+4. **Backend Processing**
+   - Convert received bytes to OpenCV-compatible format
+   - Forward to ROS localization backend via HTTP API
+   - Process pose estimation results
+   - Send results back to Unity client
 
-- **Encoding:** Convert the Texture2D to a byte array using Texture2D.EncodeToJPG(quality) or EncodeToPNG().
-    
-    - Note: JPG is recommended for high-frequency streaming due to smaller file sizes.
-        
-- **Threading:** Move the encoding process to a background thread or use AsyncGPUReadback to prevent frame drops in the Unity main UI thread.
-    
+### Performance Considerations
 
-### 3. WebSocket Transmission (Client)
+- **Asynchronous Processing**: Non-blocking I/O throughout the pipeline
+- **Connection Management**: Efficient handling of multiple client connections
+- **Error Handling**: Graceful handling of disconnections and processing errors
+- **Resource Optimization**: Reuse HTTP client sessions to minimize resource consumption
 
-Unity acts as a WebSocket client to establish a persistent, low-latency connection.
+## Development
 
-- **Data Type:** Send data as **Binary Messages** (byte[]) rather than Base64 strings. Base64 increases data size by approximately 33%.
-    
-- **Protocol:**
-    
-    - **Header (Optional):** Attach a small JSON header or a fixed-size byte prefix (e.g., 4 bytes for timestamp, 4 bytes for image ID).
-        
-    - **Payload:** The compressed image bytes.
-        
+### Python Development
 
-### 4. Python Backend & ROS Integration
+```shell
+# Install dependencies
+pip install -e .
 
-The Python server acts as the bridge between the network and the ROS ecosystem.
+# Run WebSocket server for testing
+python container/server-v2.py
 
-#### A. Data Decoding
+# Run ROS backend for testing
+python ros/app.py
+```
 
-- **Library:** Use websockets (asyncio) for the server.
-    
-- **Processing:** Receive the byte[] and convert it into an OpenCV-compatible format:
-    
-    codePython
-    
-    ```
-    import cv2
-    import numpy as np
-    
-    # Receive binary data from websocket
-    nparr = np.frombuffer(binary_data, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    ```
-    
+### Unity Development
 
-#### B. ROS Publishing (Inside Container)
+- Use Unity Editor's Play mode for testing
+- Monitor WebSocket connection status in Console
+- Test image capture and transmission functionality
 
-To make the image available to other ROS nodes:
+## Future Improvements
 
-1. Initialize a ROS node within the Python script.
-    
-2. Use cv_bridge to convert the OpenCV image to a sensor_msgs/Image message.
-    
-3. Publish to a topic (e.g., /hmd/camera_frames).
-    
-
-### 5. Feedback Loop (Optional)
-
-If the system requires visualization (e.g., bounding boxes or SLAM points) on the HMD:
-
-- **Inference:** Python processes the image (YOLO, MediaPipe, etc.).
-    
-- **Serialized Results:** Send coordinates or classification results back to Unity via the same WebSocket as a JSON string.
-    
-- **Unity Rendering:** Parse the JSON and use the Canvas or LineRenderer to draw overlays on the user's view.
+- [ ] Add authentication for WebSocket connections
+- [ ] Implement frame rate optimization for low-bandwidth scenarios
+- [ ] Add support for multiple camera streams
+- [ ] Implement sensor fusion between IMU and visual localization
+- [ ] Add monitoring and logging dashboard
+- [ ] Support for both ROS 1 and ROS 2 backends
+- [ ] Container orchestration with Docker Compose
+- [ ] Test image restore and manipulate
+- [ ] Test send back pose/info to unity
+- [ ] Retrieve continuous pose of HMD
