@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 
 
-def decode_bytes_to_cv2(image_bytes):
+def decode_bytes_to_cv2(image_bytes: bytes) -> np.ndarray | None:
     """Decodes raw image bytes into an OpenCV image (numpy array).
 
     Uses OpenCV to decode the byte stream directly into a BGR numpy array.

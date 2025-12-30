@@ -11,28 +11,25 @@ from sensor_msgs.msg import CompressedImage
 from tf2_msgs.msg import TFMessage
 from std_msgs.msg import Header
 
-# ================= Configuration =================
-# Input Topic (Topic to publish images to)
-INPUT_TOPIC = "/camera/undistorted/compressed" 
-# Output Topic (Topic to subscribe for results)
-OUTPUT_TOPIC = "/tf"
-
 class TopicTester:
-    def __init__(self, image_path):
+    def __init__(self, image_path, input_topic="/camera/undistorted/compressed", output_topic="/tf"):
         # Initialize ROS node
         rospy.init_node('topic_tester', anonymous=True)
         
         self.image_path = image_path
+        self.input_topic = input_topic
+        self.output_topic = output_topic
+        
         self.img = cv2.imread(image_path)
         if self.img is None:
             rospy.logerr(f"Failed to load image from: {image_path}")
             sys.exit(1)
         
         # Publisher for the image
-        self.image_pub = rospy.Publisher(INPUT_TOPIC, CompressedImage, queue_size=1)
+        self.image_pub = rospy.Publisher(self.input_topic, CompressedImage, queue_size=1)
         
         # Subscriber for the pose (TF)
-        self.tf_sub = rospy.Subscriber(OUTPUT_TOPIC, TFMessage, self.tf_callback)
+        self.tf_sub = rospy.Subscriber(self.output_topic, TFMessage, self.tf_callback)
         
         self.last_pub_time = None
         self.lock = threading.Lock()
