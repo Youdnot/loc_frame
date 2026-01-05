@@ -8,7 +8,6 @@ import sys
 import numpy as np
 import cv2
 
-
 def decode_bytes_to_cv2(image_bytes: bytes) -> np.ndarray | None:
     """Decodes raw image bytes into an OpenCV image (numpy array).
 

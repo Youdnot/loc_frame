@@ -1,0 +1,4 @@
+server.py 已经经过测试可以和Unity正常集成工作。
+
+接下来修改server-v2.py以尝试直接配合ros进行定位
+单个完成后再尝试多container部署
